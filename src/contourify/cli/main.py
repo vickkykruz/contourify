@@ -1,0 +1,280 @@
+"""
+    contourify CLI — Command line interface.
+
+    Usage:
+        contourify detect IMAGE
+        contourify generate IMAGE --object 0 --text "My Product" --link https://example.com
+        contourify generate IMAGE --object 0 --text "My Product" --link https://example.com --output result.svg
+        contourify generate IMAGE --object 0 --text "My Product" --link https://example.com --color "#27c97a"
+        contourify --telemetry on|off|status
+        contourify --version
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+
+import click
+
+from contourify import Contourify, __version__
+from contourify.telemetry.tracker import (
+    prompt_first_run,
+    handle_telemetry_flag,
+    track_detect,
+    track_generate,
+    track_cli_run,
+)
+
+
+# ── CLI group ─────────────────────────────────────────────────────────────────
+
+@click.group()
+@click.version_option(version=__version__, prog_name="contourify")
+@click.option(
+    "--telemetry",
+    default=None,
+    metavar="on|off|status",
+    help="Manage anonymous usage telemetry.",
+)
+@click.pass_context
+def cli(ctx: click.Context, telemetry: str | None) -> None:
+    """
+    contourify — Turn any image into an interactive SVG
+    with AI-powered object detection and clickable hotspots.
+
+    \b
+    Quick start:
+        contourify detect photo.jpg
+        contourify generate photo.jpg --object 0 --text "My Chair" --link https://example.com
+
+    \b
+    Telemetry:
+        contourify --telemetry status
+        contourify --telemetry off
+    """
+    # Handle telemetry flag before anything else
+    if telemetry is not None:
+        handle_telemetry_flag(telemetry)
+        ctx.exit()
+
+    # Show first-run prompt on any command
+    prompt_first_run()
+
+
+# ── detect command ────────────────────────────────────────────────────────────
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True))
+@click.option(
+    "--model", "-m",
+    default="yolov8n-seg.pt",
+    show_default=True,
+    help="YOLOv8 segmentation model to use.",
+)
+@click.option(
+    "--conf", "-c",
+    default=0.25,
+    show_default=True,
+    type=float,
+    help="Minimum confidence threshold (0-1).",
+)
+def detect(image: str, model: str, conf: float) -> None:
+    """
+    Detect all objects in an IMAGE.
+
+    \b
+    Example:
+        contourify detect photo.jpg
+        contourify detect photo.jpg --conf 0.15
+        contourify detect photo.jpg --model yolov8s-seg.pt
+
+    \b
+    Output:
+        Lists all detected objects with their ID,
+        label and confidence score.
+        Use the ID with the generate command.
+    """
+    track_cli_run("detect")
+
+    click.echo(f"\n  🔍 Detecting objects in: {os.path.basename(image)}\n")
+
+    try:
+        ct      = Contourify(model=model)
+        objects = ct.detect(image)
+    except ValueError as e:
+        click.echo(f"  ✕ Image rejected: {e}", err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"  ✕ Detection failed: {e}", err=True)
+        sys.exit(1)
+
+    if not objects:
+        click.echo("  No objects detected.")
+        click.echo("  Tips:")
+        click.echo("    • Use a clearer, well-focused image")
+        click.echo("    • Lower the confidence: --conf 0.15")
+        click.echo("    • Try a larger model: --model yolov8s-seg.pt")
+        return
+
+    # ── Print results table ───────────────────────────────────────────────
+    click.echo(f"  Found {len(objects)} object(s):\n")
+    click.echo(f"  {'ID':<6} {'Label':<20} {'Confidence':<12}")
+    click.echo(f"  {'─' * 6} {'─' * 20} {'─' * 12}")
+
+    for obj in objects:
+        click.echo(
+            f"  {obj.id:<6} {obj.label.capitalize():<20} {obj.score_pct:<12}"
+        )
+
+    click.echo()
+    click.echo(
+        "  Use the ID above with the generate command:\n"
+        f"  contourify generate {os.path.basename(image)} "
+        "--object <ID> --text \"...\" --link https://..."
+    )
+    click.echo()
+
+    track_detect(len(objects))
+
+
+# ── generate command ──────────────────────────────────────────────────────────
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True))
+@click.option(
+    "--object", "-o",
+    "object_id",
+    required=True,
+    type=int,
+    help="ID of the detected object to annotate (from detect command).",
+)
+@click.option(
+    "--text", "-t",
+    required=True,
+    help="Description shown in the hover popup card.",
+)
+@click.option(
+    "--link", "-l",
+    required=True,
+    help="URL opened when the Visit Link button is clicked.",
+)
+@click.option(
+    "--color",
+    default="#3b82f6",
+    show_default=True,
+    help="Highlight color as a hex string.",
+)
+@click.option(
+    "--output",
+    default=None,
+    help=(
+        "Output SVG file path. "
+        "Defaults to <image_name>_contourify.svg in the same folder."
+    ),
+)
+@click.option(
+    "--model", "-m",
+    default="yolov8n-seg.pt",
+    show_default=True,
+    help="YOLOv8 segmentation model to use.",
+)
+def generate(
+    image:     str,
+    object_id: int,
+    text:      str,
+    link:      str,
+    color:     str,
+    output:    str | None,
+    model:     str,
+) -> None:
+    """
+    Generate an interactive SVG for a detected object in IMAGE.
+
+    \b
+    Example:
+        contourify generate photo.jpg \\
+            --object 0 \\
+            --text "Handcrafted Oak Chair" \\
+            --link https://shop.example.com/chair
+
+    \b
+        contourify generate photo.jpg \\
+            --object 1 \\
+            --text "Sony A7 Camera" \\
+            --link https://shop.example.com/camera \\
+            --color "#27c97a" \\
+            --output camera_hotspot.svg
+    """
+    track_cli_run("generate")
+
+    # ── Default output path ───────────────────────────────────────────────
+    if output is None:
+        base   = os.path.splitext(os.path.basename(image))[0]
+        folder = os.path.dirname(os.path.abspath(image))
+        output = os.path.join(folder, f"{base}_contourify.svg")
+
+    click.echo(f"\n  ⚙  Processing: {os.path.basename(image)}")
+    click.echo(f"  Object ID:    {object_id}")
+    click.echo(f"  Text:         {text}")
+    click.echo(f"  Link:         {link}")
+    click.echo(f"  Color:        {color}")
+    click.echo()
+
+    try:
+        ct  = Contourify(model=model)
+        svg = ct.generate(
+            image_path=image,
+            object_id=object_id,
+            text=text,
+            link=link,
+            color=color,
+        )
+    except FileNotFoundError as e:
+        click.echo(f"  ✕ {e}", err=True)
+        sys.exit(1)
+    except ValueError as e:
+        click.echo(f"  ✕ {e}", err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"  ✕ Generation failed: {e}", err=True)
+        sys.exit(1)
+
+    # ── Save SVG ──────────────────────────────────────────────────────────
+    try:
+        from contourify.core.generator import Generator
+        saved = Generator().save(svg, output)
+        click.echo(f"  ✅ SVG saved to: {saved}")
+        click.echo()
+        click.echo("  Open the file in any browser to see the")
+        click.echo("  interactive hotspot.")
+        click.echo()
+    except Exception as e:
+        click.echo(f"  ✕ Could not save SVG: {e}", err=True)
+        sys.exit(1)
+
+    track_generate(color)
+
+
+# ── info command ──────────────────────────────────────────────────────────────
+
+@cli.command()
+def info() -> None:
+    """
+    Show contourify version and configuration info.
+
+    \b
+    Example:
+        contourify info
+    """
+    from contourify.telemetry.tracker import show_config
+
+    click.echo(f"\n  contourify v{__version__}")
+    click.echo(f"  Python {sys.version.split()[0]}")
+    click.echo()
+
+    cfg = show_config()
+    click.echo(f"  Telemetry:  {'enabled' if cfg['telemetry_enabled'] else 'disabled'}")
+    click.echo(f"  Newsletter: {cfg['newsletter_email']}")
+    click.echo(f"  Config:     {cfg['config_path']}")
+    click.echo()
