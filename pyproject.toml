@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "contourify"
+version = "0.1.0"
+description = "Turn any image into an interactive SVG with AI-powered object detection and clickable hotspots."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+authors = [
+    { name = "Victor Chukwuemeka", email = "onwuegbuchulemvic02@gmail.com" }
+]
+keywords = [
+    "image", "svg", "hotspot", "yolo",
+    "object-detection", "interactive", "contour"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+dependencies = [
+    "ultralytics>=8.0.0",
+    "pillow>=9.0.0",
+    "opencv-python-headless>=4.5.0",
+    "click>=8.0.0",
+    "requests>=2.28.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+]
+
+[project.scripts]
+contourify = "contourify.cli.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/vickkykruz/contourify"
+Repository = "https://github.com/vickkykruz/contourify"
+"Bug Tracker" = "https://github.com/vickkykruz/contourify/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["contourify*"]
+
+[tool.setuptools.package-data]
+contourify = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.black]
+line-length = 88
+target-version = ["py39", "py310", "py311", "py312"]
