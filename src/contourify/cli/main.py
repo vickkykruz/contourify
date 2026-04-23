@@ -4,6 +4,7 @@
     Usage:
         contourify detect IMAGE
         contourify generate IMAGE --object 0 --text "My Product" --link https://example.com
+        contourify generate IMAGE --object 0 --text "My Product" --link https://example.com --format html
         contourify generate IMAGE --object 0 --text "My Product" --link https://example.com --label "Deer"
         contourify generate IMAGE --object 0 --text "My Product" --link https://example.com --output result.svg
         contourify generate IMAGE --object 0 --text "My Product" --link https://example.com --color "#27c97a"
@@ -46,9 +47,16 @@ def cli(ctx: click.Context, telemetry: str | None) -> None:
     with AI-powered object detection and clickable hotspots.
  
     \b
-    Quick start:
+    Step 1 — detect objects in your image:
         contourify detect photo.jpg
+ 
+    \b
+    Step 2 — generate interactive SVG:
         contourify generate photo.jpg --object 0 --text "My Chair" --link https://example.com
+ 
+    \b
+    Step 2 (HTML — no white space when opened locally):
+        contourify generate photo.jpg --object 0 --text "My Chair" --link https://example.com --format html
  
     \b
     Override a misdetected label:
@@ -59,12 +67,10 @@ def cli(ctx: click.Context, telemetry: str | None) -> None:
         contourify --telemetry status
         contourify --telemetry off
     """
-    # Handle telemetry flag before anything else
     if telemetry is not None:
         handle_telemetry_flag(telemetry)
         ctx.exit()
  
-    # Show first-run prompt on any command
     prompt_first_run()
  
  
@@ -90,7 +96,7 @@ def detect(image: str, model: str, conf: float) -> None:
     Detect all objects in an IMAGE.
  
     \b
-    Example:
+    Examples:
         contourify detect photo.jpg
         contourify detect photo.jpg --conf 0.15
         contourify detect photo.jpg --model yolov8s-seg.pt
@@ -126,8 +132,8 @@ def detect(image: str, model: str, conf: float) -> None:
         click.echo()
         click.echo("  Tips:")
         click.echo("    - Use a clearer, well-focused image")
-        click.echo(f"    - Lower the confidence: --conf 0.15")
-        click.echo(f"    - Try a larger model: --model yolov8s-seg.pt")
+        click.echo("    - Lower the confidence: --conf 0.15")
+        click.echo("    - Try a larger model: --model yolov8s-seg.pt")
         click.echo()
         click.echo(
             "  Note: contourify detects 80 common object types including"
@@ -154,26 +160,22 @@ def detect(image: str, model: str, conf: float) -> None:
     low_conf = [o for o in objects if o.score < 0.4]
     if low_conf:
         click.echo()
-        click.echo(
-            "  Warning: Some detections have low confidence."
-        )
+        click.echo("  Warning: Some detections have low confidence.")
         click.echo(
             "  The label may be incorrect if the object is not in"
         )
         click.echo(
             "  the 80 supported COCO classes (e.g. deer, fox, wolf)."
         )
-        click.echo(
-            "  Use --label to override the displayed label:"
-        )
+        click.echo("  Use --label to override the displayed label:")
         click.echo(
             f"  contourify generate {os.path.basename(image)} "
             "--object <ID> --text \"...\" --link ... --label \"YourLabel\""
         )
  
     click.echo()
+    click.echo("  Next step — generate your interactive SVG:")
     click.echo(
-        "  Use the ID above with the generate command:\n"
         f"  contourify generate {os.path.basename(image)} "
         "--object <ID> --text \"...\" --link https://..."
     )
@@ -219,11 +221,24 @@ def detect(image: str, model: str, conf: float) -> None:
     ),
 )
 @click.option(
+    "--format", "fmt",
+    default="svg",
+    show_default=True,
+    type=click.Choice(["svg", "html"], case_sensitive=False),
+    help=(
+        "Output format. "
+        "'svg' (default) — standard SVG file. "
+        "'html' — full-screen HTML wrapper, eliminates white "
+        "space when opening locally in a browser."
+    ),
+)
+@click.option(
     "--output",
     default=None,
     help=(
-        "Output SVG file path. "
-        "Defaults to <image_name>_contourify.svg in the same folder."
+        "Output file path. "
+        "Defaults to <image_name>_contourify.svg (or .html) "
+        "in the same folder as the image."
     ),
 )
 @click.option(
@@ -239,18 +254,27 @@ def generate(
     link:      str,
     color:     str,
     label:     str | None,
+    fmt:       str,
     output:    str | None,
     model:     str,
 ) -> None:
     """
-    Generate an interactive SVG for a detected object in IMAGE.
+    Generate an interactive SVG (or HTML) for a detected object.
  
     \b
-    Example:
+    Basic example:
         contourify generate photo.jpg \\
             --object 0 \\
             --text "Handcrafted Oak Chair" \\
             --link https://shop.example.com/chair
+ 
+    \b
+    HTML output (no white space when opened locally):
+        contourify generate photo.jpg \\
+            --object 0 \\
+            --text "Handcrafted Oak Chair" \\
+            --link https://shop.example.com/chair \\
+            --format html
  
     \b
     Override a misdetected label:
@@ -272,29 +296,32 @@ def generate(
     track_cli_run("generate")
  
     # ── Default output path ───────────────────────────────────────────────
+    ext = ".html" if fmt == "html" else ".svg"
     if output is None:
         base   = os.path.splitext(os.path.basename(image))[0]
         folder = os.path.dirname(os.path.abspath(image))
-        output = os.path.join(folder, f"{base}_contourify.svg")
+        output = os.path.join(folder, f"{base}_contourify{ext}")
  
     click.echo(f"\n  Processing: {os.path.basename(image)}")
     click.echo(f"  Object ID:  {object_id}")
     click.echo(f"  Text:       {text}")
     click.echo(f"  Link:       {link}")
     click.echo(f"  Color:      {color}")
+    click.echo(f"  Format:     {fmt.upper()}")
     if label:
         click.echo(f"  Label:      {label} (override)")
     click.echo()
  
     try:
-        ct  = Contourify(model=model)
-        svg = ct.generate(
+        ct     = Contourify(model=model)
+        result = ct.generate(
             image_path=image,
             object_id=object_id,
             text=text,
             link=link,
             color=color,
             label=label,
+            fmt=fmt,
         )
     except FileNotFoundError as e:
         click.echo(f"  {e}", err=True)
@@ -306,17 +333,22 @@ def generate(
         click.echo(f"  Generation failed: {e}", err=True)
         sys.exit(1)
  
-    # ── Save SVG ──────────────────────────────────────────────────────────
+    # ── Save output ───────────────────────────────────────────────────────
     try:
         from contourify.core.generator import Generator
-        saved = Generator().save(svg, output)
-        click.echo(f"  SVG saved to: {saved}")
+        gen   = Generator()
+        saved = (
+            gen.save_html(result, output)
+            if fmt == "html"
+            else gen.save(result, output)
+        )
+        click.echo(f"  Saved to: {saved}")
         click.echo()
         click.echo("  Open the file in any browser to see the")
         click.echo("  interactive hotspot.")
         click.echo()
     except Exception as e:
-        click.echo(f"  Could not save SVG: {e}", err=True)
+        click.echo(f"  Could not save output: {e}", err=True)
         sys.exit(1)
  
     track_generate(color)
@@ -339,9 +371,18 @@ def info() -> None:
     click.echo(f"\n  contourify v{__version__}")
     click.echo(f"  Python {sys.version.split()[0]}")
     click.echo()
+    click.echo("  Quick start:")
+    click.echo("    contourify detect photo.jpg")
+    click.echo(
+        "    contourify generate photo.jpg "
+        "--object 0 --text \"...\" --link https://..."
+    )
+    click.echo()
  
     cfg = show_config()
-    click.echo(f"  Telemetry:   {'enabled' if cfg['telemetry_enabled'] else 'disabled'}")
+    click.echo(
+        f"  Telemetry:   {'enabled' if cfg['telemetry_enabled'] else 'disabled'}"
+    )
     click.echo(f"  Newsletter:  {cfg['newsletter_email']}")
     click.echo(f"  Config:      {cfg['config_path']}")
     click.echo(f"  Model cache: {MODEL_DIR}")

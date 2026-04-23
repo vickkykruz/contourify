@@ -40,6 +40,11 @@ class Generator:
         )
         with open("output.svg", "w") as f:
             f.write(svg)
+ 
+        # Or wrap in HTML to eliminate white space locally
+        html = generator.wrap_html(svg)
+        with open("output.html", "w") as f:
+            f.write(html)
     """
  
     def generate(
@@ -115,11 +120,26 @@ class Generator:
  
         popup_x = max(4, min(bbox_cx - popup_w / 2, w - popup_w - 4))
  
-        # Prefer above the object; fall back to below
-        if bbox_y1 > popup_h + 20 * scale:
-            popup_y = bbox_y1 - popup_h - 12 * scale
+        # ── Smart popup vertical placement ───────────────────────────────
+        # Priority order:
+        #   1. Above the object if there is enough room
+        #   2. Below the object if there is enough room
+        #   3. Clamped inside the image if neither fits cleanly
+        margin = 12 * scale
+ 
+        above_y   = bbox_y1 - popup_h - margin
+        below_y   = bbox_y2 + margin
+        fits_above = above_y >= 4
+        fits_below = below_y + popup_h <= h - 4
+ 
+        if fits_above:
+            popup_y = above_y
+        elif fits_below:
+            popup_y = below_y
         else:
-            popup_y = bbox_y2 + 12 * scale
+            # Neither fits cleanly — centre vertically on the object
+            obj_cy  = (bbox_y1 + bbox_y2) / 2
+            popup_y = obj_cy - popup_h / 2
  
         # Final clamp — never overflow image bounds
         popup_y = max(4, min(popup_y, h - popup_h - 4))
@@ -151,14 +171,12 @@ class Generator:
         )
  
         # ── Build SVG ─────────────────────────────────────────────────────
-        # The SVG uses preserveAspectRatio on the root element so it fills
-        # the browser viewport without white gaps on either side.
         svg = f"""<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg"
      xmlns:xlink="http://www.w3.org/1999/xlink"
      viewBox="0 0 {w} {h}"
      preserveAspectRatio="xMidYMid meet"
-     style="width:100%;height:100vh;display:block;">
+     style="width:100%;height:100%;display:block;">
  
   <style>
     .hotspot-path {{ cursor: pointer; }}
@@ -252,6 +270,64 @@ class Generator:
  
         return svg
  
+    def wrap_html(self, svg: str) -> str:
+        """
+        Wrap an SVG string in a full-screen HTML page.
+ 
+        This eliminates the white space that browsers add when
+        opening a standalone .svg file locally. Use this when
+        you want the image to fill the entire browser window.
+ 
+        Args:
+            svg: SVG document string from generate().
+ 
+        Returns:
+            Complete HTML document as a string.
+ 
+        Example:
+            svg  = generator.generate(...)
+            html = generator.wrap_html(svg)
+            with open("output.html", "w") as f:
+                f.write(html)
+        """
+        return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>contourify</title>
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    html, body {{
+      width: 100%; height: 100%;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }}
+    .svg-container {{
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }}
+    .svg-container svg {{
+      max-width: 100vw;
+      max-height: 100vh;
+      width: auto;
+      height: auto;
+    }}
+  </style>
+</head>
+<body>
+  <div class="svg-container">
+    {svg}
+  </div>
+</body>
+</html>"""
+ 
     def save(
         self,
         svg:         str,
@@ -278,6 +354,35 @@ class Generator:
  
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(svg)
+ 
+        return os.path.abspath(output_path)
+ 
+    def save_html(
+        self,
+        svg:         str,
+        output_path: str,
+    ) -> str:
+        """
+        Wrap SVG in HTML and save to a file.
+ 
+        Args:
+            svg:         SVG document string from generate().
+            output_path: Destination file path.
+                         Extension is added if missing.
+ 
+        Returns:
+            Absolute path to the saved HTML file.
+        """
+        if not output_path.endswith(".html"):
+            output_path += ".html"
+ 
+        os.makedirs(
+            os.path.dirname(os.path.abspath(output_path)),
+            exist_ok=True
+        )
+ 
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(self.wrap_html(svg))
  
         return os.path.abspath(output_path)
  

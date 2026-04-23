@@ -15,10 +15,21 @@
         )
         with open("output.svg", "w") as f:
             f.write(svg)
+ 
+        # Generate HTML wrapper (fixes white space when opening locally)
+        html = ct.generate(
+            image_path="image.jpg",
+            object_id=0,
+            text="My Product",
+            link="https://example.com",
+            fmt="html",
+        )
+        with open("output.html", "w") as f:
+            f.write(html)
 """
  
-__version__ = "0.1.1"
-__author__  = "Victor Chukwuemeka.O"
+__version__ = "0.1.2"
+__author__  = "Victor Chukwuemeka"
 __email__   = "onwuegbuchulemvic02@gmail.com"
 __license__ = "MIT"
  
@@ -53,6 +64,15 @@ class Contourify:
             text="Beautiful Fallow Deer",
             link="https://example.com",
             label="Deer",
+        )
+ 
+        # Generate HTML wrapper — no white space when opened locally
+        html = ct.generate(
+            image_path="photo.jpg",
+            object_id=0,
+            text="My Product",
+            link="https://example.com",
+            fmt="html",
         )
     """
  
@@ -96,9 +116,10 @@ class Contourify:
         link:       str,
         color:      str = "#3b82f6",
         label:      str | None = None,
+        fmt:        str = "svg",
     ) -> str:
         """
-        Generate an interactive SVG for a detected object.
+        Generate an interactive SVG or HTML for a detected object.
  
         Args:
             image_path: Path to the image file.
@@ -110,14 +131,22 @@ class Contourify:
             label:      Override the label shown in the popup header.
                         Useful when YOLO misidentifies an object.
                         If None the YOLO detected label is used.
+            fmt:        Output format. "svg" (default) or "html".
+                        Use "html" to eliminate white space when
+                        opening the file locally in a browser.
  
         Returns:
-            SVG document as a string.
+            SVG or HTML document as a string.
  
         Raises:
             FileNotFoundError: If the image does not exist.
-            ValueError: If the object_id is not found.
+            ValueError: If the object_id is not found or fmt is invalid.
         """
+        if fmt not in ("svg", "html"):
+            raise ValueError(
+                f"Invalid format '{fmt}'. Use 'svg' or 'html'."
+            )
+ 
         valid, reason = validate_image(image_path)
         if not valid:
             raise ValueError(reason)
@@ -130,7 +159,7 @@ class Contourify:
                 f"Available ids: {[o.id for o in objects]}"
             )
  
-        return self._generator.generate(
+        svg = self._generator.generate(
             image_path=image_path,
             obj=obj,
             text=text,
@@ -138,6 +167,11 @@ class Contourify:
             color=color,
             label=label,
         )
+ 
+        if fmt == "html":
+            return self._generator.wrap_html(svg)
+ 
+        return svg
  
     def detect_and_generate(
         self,
@@ -147,6 +181,7 @@ class Contourify:
         link:       str,
         color:      str = "#3b82f6",
         label:      str | None = None,
+        fmt:        str = "svg",
     ) -> tuple[list, str]:
         """
         Convenience method — detect and generate in one call.
@@ -158,9 +193,10 @@ class Contourify:
             link:       URL opened when the user clicks Visit Link.
             color:      Highlight color as a hex string.
             label:      Override the label shown in the popup header.
+            fmt:        Output format. "svg" or "html".
  
         Returns:
-            Tuple of (objects, svg_string).
+            Tuple of (objects, output_string).
         """
         valid, reason = validate_image(image_path)
         if not valid:
@@ -182,7 +218,9 @@ class Contourify:
             color=color,
             label=label,
         )
-        return objects, svg
+ 
+        output = self._generator.wrap_html(svg) if fmt == "html" else svg
+        return objects, output
  
  
 __all__ = [
