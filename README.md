@@ -1,12 +1,15 @@
-# contourify
- 
-> Turn any image into an interactive SVG with AI-powered object detection and clickable hotspots.
- 
-[![PyPI version](https://badge.fury.io/py/contourify.svg)](https://badge.fury.io/py/contourify)
-[![Python](https://img.shields.io/pypi/pyversions/contourify.svg)](https://pypi.org/project/contourify)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-58%20passing-brightgreen.svg)](https://github.com/vickkykruz/contourify)
- 
+<p align="center">
+  <img src="https://i.ibb.co/pBGtZb8b/contourify-logo.png" alt="contourify" width="240"/>
+</p>
+<p align="center">
+  <strong>Turn any image into an interactive SVG with AI-powered object detection and clickable hotspots.</strong>
+</p>
+<p align="center">
+  <a href="https://badge.fury.io/py/contourify"><img src="https://badge.fury.io/py/contourify.svg" alt="PyPI version"/></a>
+  <a href="https://pypi.org/project/contourify"><img src="https://img.shields.io/pypi/pyversions/contourify.svg" alt="Python"/></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"/></a>
+  <a href="https://github.com/vickkykruz/contourify"><img src="https://img.shields.io/badge/tests-58%20passing-brightgreen.svg" alt="Tests"/></a>
+</p>
 ---
  
 ## What is contourify?
@@ -30,6 +33,82 @@ The output SVG:
 - Works anywhere SVG is supported — browsers, email, Discord, LinkedIn
 ---
  
+## Demo
+ 
+### Input → Output
+ 
+> **Step 1** — Run `contourify detect` on your image
+ 
+<!-- DEMO: Replace the block below with a screenshot of the terminal
+     showing the detect command output.
+     Suggested filename: docs/demo_detect.png
+     Example:
+     ![Detect output](docs/demo_detect.png)
+-->
+ 
+```
+  Detecting objects in: product.jpg
+  Model: yolov8n-seg.pt
+ 
+  Found 3 object(s):
+ 
+  ID     Label                Confidence
+  ──────  ────────────────────  ────────────
+  0       Chair                91%
+  1       Laptop               85%
+  2       Cup                  63%
+```
+ 
+---
+ 
+> **Step 2** — Run `contourify generate` to produce the interactive file
+ 
+<!-- DEMO: Replace this comment with a side-by-side comparison image
+     showing the original photo on the left and the SVG output on the right.
+     Suggested filename: docs/demo_generate.png
+     Example:
+     ![Original vs SVG output](docs/demo_generate.png)
+-->
+ 
+---
+ 
+> **Step 3** — Open the file in any browser and hover over the object
+ 
+<!-- DEMO: Replace this comment with a screenshot of the SVG open in a browser
+     with the popup card fully visible on hover.
+     Suggested filename: docs/demo_hover.png
+     Example:
+     ![Hover popup card](docs/demo_hover.png)
+-->
+ 
+---
+ 
+### Full pipeline
+ 
+```
+┌─────────────┐    contourify detect     ┌──────────────────────┐
+│  photo.jpg  │ ────────────────────►   │  0: Chair  91%       │
+│             │                          │  1: Laptop 85%       │
+└─────────────┘                          └──────────────────────┘
+                                                    │
+                                  contourify generate --object 0
+                                                    │
+                                                    ▼
+                                      ┌─────────────────────────┐
+                                      │  photo_contourify.svg   │
+                                      │  ┌───────────────────┐  │
+                                      │  │ [animated outline] │  │
+                                      │  │  ┌─────────────┐  │  │
+                                      │  │  │   CHAIR     │  │  │
+                                      │  │  │  Oak Chair  │  │  │
+                                      │  │  │ Visit Link →│  │  │
+                                      │  │  └─────────────┘  │  │
+                                      │  └───────────────────┘  │
+                                      └─────────────────────────┘
+```
+ 
+---
+ 
 ## Installation
  
 ```bash
@@ -39,6 +118,44 @@ pip install contourify
 ---
  
 ## Quick Start
+ 
+### CLI
+ 
+```bash
+# Show the full getting started guide
+contourify help
+ 
+# Step 1 — detect objects in your image
+contourify detect photo.jpg
+ 
+# Step 2 — generate interactive SVG
+contourify generate photo.jpg \
+    --object 0 \
+    --text "Handcrafted Oak Chair" \
+    --link "https://shop.example.com/chair"
+ 
+# HTML output — no white space when opened locally
+contourify generate photo.jpg \
+    --object 0 \
+    --text "Handcrafted Oak Chair" \
+    --link "https://shop.example.com/chair" \
+    --format html
+ 
+# Override a misdetected label
+contourify generate photo.jpg \
+    --object 0 \
+    --text "Beautiful Fallow Deer" \
+    --link "https://example.com" \
+    --label "Deer"
+ 
+# Custom color and output path
+contourify generate photo.jpg \
+    --object 1 \
+    --text "Sony A7 Camera" \
+    --link "https://shop.example.com/camera" \
+    --color "#27c97a" \
+    --output camera_hotspot.svg
+```
  
 ### Python API
  
@@ -69,10 +186,6 @@ with open("chair_interactive.svg", "w", encoding="utf-8") as f:
 ### One-call API
  
 ```python
-from contourify import Contourify
- 
-ct = Contourify()
- 
 objects, svg = ct.detect_and_generate(
     image_path="photo.jpg",
     object_id=0,
@@ -80,74 +193,147 @@ objects, svg = ct.detect_and_generate(
     link="https://shop.example.com/camera",
     color="#27c97a",
 )
- 
-with open("camera_interactive.svg", "w", encoding="utf-8") as f:
-    f.write(svg)
 ```
  
-### CLI
+### HTML output
  
-```bash
-# Detect all objects in an image
-contourify detect photo.jpg
+```python
+html = ct.generate(
+    image_path="photo.jpg",
+    object_id=0,
+    text="My Product",
+    link="https://example.com",
+    fmt="html",   # full-screen, no white space when opened locally
+)
+```
  
-# Output example:
-#   Found 3 object(s):
-#
-#   ID     Label                Confidence
-#   ──────  ────────────────────  ────────────
-#   0       Chair                91%
-#   1       Laptop               85%
-#   2       Cup                  63%
-#
-#   Use the ID above with the generate command:
-#   contourify generate photo.jpg --object <ID> --text "..." --link https://...
+### Label override
  
-# Generate interactive SVG
-contourify generate photo.jpg \
-    --object 0 \
-    --text "Handcrafted Oak Chair" \
-    --link "https://shop.example.com/chair"
- 
-# With custom color and output path
-contourify generate photo.jpg \
-    --object 1 \
-    --text "Sony A7 Camera" \
-    --link "https://shop.example.com/camera" \
-    --color "#27c97a" \
-    --output camera_hotspot.svg
+```python
+svg = ct.generate(
+    image_path="photo.jpg",
+    object_id=0,
+    text="Beautiful Fallow Deer",
+    link="https://example.com",
+    label="Deer",   # overrides whatever the model detected
+)
 ```
  
 ---
  
-## Image Quality Requirements
+## Model Management
  
-contourify validates images before processing to ensure accurate detection:
+### List available models
+ 
+```bash
+contourify models list
+```
+ 
+```
+  Available models:
+ 
+  Name                   Size       Speed        Accuracy
+  ──────────────────────  ──────────  ────────────  ────────────
+  yolov8n-seg.pt         6.7 MB     Fastest      Good         <- default
+  yolov8s-seg.pt         22 MB      Fast         Better
+  yolov8m-seg.pt         52 MB      Medium       Best
+  yolov8l-seg.pt         87 MB      Slow         Excellent
+  yolov8x-seg.pt         136 MB     Slowest      Maximum
+```
+ 
+### Set default model
+ 
+```bash
+contourify models set yolov8s      # set small as default
+contourify models set yolov8m      # set medium as default
+contourify models set yolov8n      # reset to nano (fastest)
+```
+ 
+### Pre-download models
+ 
+```bash
+contourify models download yolov8s     # download one model
+contourify models download all         # download all models
+```
+ 
+### Use a model in Python
+ 
+```python
+ct = Contourify(model="yolov8s-seg.pt")     # small — better accuracy
+ct = Contourify(model="yolov8m-seg.pt")     # medium — best accuracy
+ct = Contourify(model="/path/to/custom.pt") # custom model path
+```
+ 
+Models are cached in `~/.contourify/models/` and never redownloaded.
+ 
+---
+ 
+## Custom Detectors
+ 
+contourify supports any detection backend via the `BaseDetector` adapter pattern.
+Plug in TensorFlow, custom trained models, or any other framework.
+ 
+```python
+from contourify import Contourify
+from contourify.adapters import BaseDetector
+from contourify.core.detector import DetectedObject, BBox
+ 
+class MyCustomDetector(BaseDetector):
+ 
+    def detect(self, image_path: str, **kwargs) -> list:
+        # Run your model here and return DetectedObject instances
+        return [
+            DetectedObject(
+                id=0,
+                label="my_object",
+                score=0.95,
+                bbox=BBox(x1=0.1, y1=0.1, x2=0.9, y2=0.9),
+                contour=[
+                    [0.1, 0.1], [0.9, 0.1],
+                    [0.9, 0.9], [0.1, 0.9],
+                ],
+                width=640,
+                height=480,
+            )
+        ]
+ 
+    @property
+    def name(self) -> str:
+        return "MyCustomDetector v1.0"
+ 
+ 
+# Use with Contourify — everything else works identically
+ct = Contourify(detector=MyCustomDetector())
+objects = ct.detect("photo.jpg")
+svg = ct.generate(
+    image_path="photo.jpg",
+    object_id=0,
+    text="My detected object",
+    link="https://example.com",
+)
+```
+ 
+### DetectedObject contract
+ 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | int | ✅ | Zero-based object index |
+| `label` | str | ✅ | Object class name |
+| `score` | float | ✅ | Confidence 0–1 |
+| `bbox` | BBox | ✅ | Normalised bounding box (0–1 range) |
+| `contour` | list | ✅ | Normalised `[[x, y], ...]` contour points |
+| `width` | int | ✅ | Natural image width in pixels |
+| `height` | int | ✅ | Natural image height in pixels |
+ 
+---
+ 
+## Image Quality Requirements
  
 | Requirement | Minimum |
 |-------------|---------|
 | File size | 20 KB |
 | Resolution | 300 × 300 px |
 | Sharpness | Clear, well-focused |
- 
-Images that are too small, too low resolution, or blurry will be rejected
-with a clear error message explaining what to fix.
- 
----
- 
-## Model Options
- 
-By default contourify uses `yolov8n-seg` (nano — fastest). For better
-accuracy on complex images use a larger model:
- 
-```python
-# More accurate — slower
-ct = Contourify(model="yolov8s-seg.pt")  # small
-ct = Contourify(model="yolov8m-seg.pt")  # medium
-ct = Contourify(model="yolov8l-seg.pt")  # large
-```
- 
-The model is downloaded automatically on first use (~6 MB for nano).
  
 ---
  
@@ -157,51 +343,35 @@ contourify collects **anonymous** usage data to help improve the library.
 You are asked once on first run. You can manage this at any time:
  
 ```bash
-contourify --telemetry status   # check current setting
-contourify --telemetry off      # disable
-contourify --telemetry on       # enable
+contourify --telemetry status
+contourify --telemetry off
+contourify --telemetry on
 ```
  
-Or programmatically:
+**Collected (with consent):** event type, platform, Python version, approximate country.
+**Never collected:** image paths, SVG output, personal data.
  
-```python
-from contourify.telemetry.tracker import disable_telemetry
-disable_telemetry()
-```
- 
-**What is collected (with consent):**
- 
-- Event type (detect, generate, cli_run)
-- Platform and Python version
-- Approximate country (from ipinfo.io)
-**What is never collected:**
- 
-- Image paths or contents
-- SVG output
-- Any personally identifying information
 Config stored at: `~/.contourify/config.json`
  
 ---
  
 ## API Reference
  
-### `Contourify(model="yolov8n-seg.pt")`
+### `Contourify(model=None, detector=None)`
  
-Main class. Initialise once and reuse.
+- `model` — YOLOv8 model name or path. Defaults to `yolov8n-seg.pt`.
+- `detector` — Custom `BaseDetector` instance. Overrides `model` if provided.
+### `.detect(image_path) → List[DetectedObject]`
  
-### `.detect(image_path, conf=0.25, imgsz=640) → List[DetectedObject]`
+Detect all objects. Returns list sorted by confidence descending.
  
-Detect all objects in an image. Returns list sorted by confidence
-descending.
+### `.generate(image_path, object_id, text, link, color, label, fmt) → str`
  
-### `.generate(image_path, object_id, text, link, color="#3b82f6") → str`
+Generate interactive SVG or HTML. `fmt` is `"svg"` (default) or `"html"`.
  
-Generate interactive SVG for a detected object. Returns SVG string.
+### `.detect_and_generate(...) → tuple`
  
-### `.detect_and_generate(image_path, object_id, text, link, color) → tuple`
- 
-Convenience method — detect and generate in one call.
-Returns `(objects, svg_string)`.
+One-call convenience. Returns `(objects, output_string)`.
  
 ### `DetectedObject`
  
@@ -210,7 +380,7 @@ Returns `(objects, svg_string)`.
 | `id` | int | Zero-based object index |
 | `label` | str | COCO class label e.g. `"chair"` |
 | `score` | float | Confidence 0–1 |
-| `score_pct` | str | Confidence as string e.g. `"91%"` |
+| `score_pct` | str | e.g. `"91%"` |
 | `bbox` | BBox | Normalised bounding box |
 | `contour` | list | Normalised contour points |
 | `width` | int | Image width in pixels |
