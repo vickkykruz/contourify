@@ -225,7 +225,7 @@ def prompt_first_run() -> None:
         # Log install event synchronously
         loc = _get_location()
         _post(ACTIVITY_URL, {
-            "type":         "tool_installed",
+            "type":         "contourify_installed",
             "source":       "contourify_cli",
             "page":         "/cli/install",
             "country":      loc["country"],

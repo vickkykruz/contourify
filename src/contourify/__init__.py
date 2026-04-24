@@ -16,26 +16,31 @@
         with open("output.svg", "w") as f:
             f.write(svg)
  
-        # Generate HTML wrapper (fixes white space when opening locally)
-        html = ct.generate(
-            image_path="image.jpg",
-            object_id=0,
-            text="My Product",
-            link="https://example.com",
-            fmt="html",
-        )
-        with open("output.html", "w") as f:
-            f.write(html)
+    Using a custom detector:
+        from contourify import Contourify
+        from contourify.adapters import BaseDetector
+ 
+        class MyDetector(BaseDetector):
+            def detect(self, image_path, **kwargs):
+                # your model here
+                return [...]
+ 
+        ct = Contourify(detector=MyDetector())
+ 
+    Using a larger YOLO model:
+        ct = Contourify(model="yolov8s-seg.pt")
 """
  
-__version__ = "0.1.2"
+__version__ = "0.2.0"
 __author__  = "Victor Chukwuemeka"
 __email__   = "onwuegbuchulemvic02@gmail.com"
 __license__ = "MIT"
  
-from contourify.core.detector  import Detector
+from contourify.core.detector  import Detector, DetectedObject, BBox
 from contourify.core.generator import Generator
 from contourify.core.validator import validate_image
+from contourify.adapters.base  import BaseDetector
+from contourify.adapters.yolo  import YOLODetector
  
  
 class Contourify:
@@ -74,18 +79,44 @@ class Contourify:
             link="https://example.com",
             fmt="html",
         )
+ 
+        # Use a custom detector
+        from contourify.adapters import BaseDetector
+        ct = Contourify(detector=MyCustomDetector())
+ 
+        # Use a larger YOLO model for better accuracy
+        ct = Contourify(model="yolov8s-seg.pt")
     """
  
-    def __init__(self, model: str = "yolov8n-seg.pt"):
+    def __init__(
+        self,
+        model:    str | None          = None,
+        detector: BaseDetector | None = None,
+    ):
         """
         Initialise Contourify.
  
         Args:
-            model: YOLOv8 segmentation model name or path.
-                   Defaults to yolov8n-seg.pt (auto-downloaded
-                   to ~/.contourify/models/ on first use).
+            model:    YOLOv8 model name or path to a .pt file.
+                      Ignored if detector is provided.
+                      Defaults to yolov8n-seg.pt.
+            detector: Custom detector instance implementing BaseDetector.
+                      If provided, model parameter is ignored.
+                      This allows plugging in TensorFlow, custom models
+                      or any other detection backend.
         """
-        self._detector  = Detector(model=model)
+        if detector is not None:
+            if not isinstance(detector, BaseDetector):
+                raise TypeError(
+                    "detector must be an instance of BaseDetector. "
+                    "See contourify.adapters.BaseDetector."
+                )
+            self._detector = detector
+        else:
+            self._detector = YOLODetector(
+                model=model or "yolov8n-seg.pt"
+            )
+ 
         self._generator = Generator()
  
     def detect(self, image_path: str) -> list:
@@ -129,8 +160,8 @@ class Contourify:
             color:      Highlight color as a hex string.
                         Defaults to blue (#3b82f6).
             label:      Override the label shown in the popup header.
-                        Useful when YOLO misidentifies an object.
-                        If None the YOLO detected label is used.
+                        Useful when the detector misidentifies an object.
+                        If None the detected label is used.
             fmt:        Output format. "svg" (default) or "html".
                         Use "html" to eliminate white space when
                         opening the file locally in a browser.
@@ -186,15 +217,6 @@ class Contourify:
         """
         Convenience method — detect and generate in one call.
  
-        Args:
-            image_path: Path to the image file.
-            object_id:  ID of the detected object to annotate.
-            text:       Description text shown in the hover popup.
-            link:       URL opened when the user clicks Visit Link.
-            color:      Highlight color as a hex string.
-            label:      Override the label shown in the popup header.
-            fmt:        Output format. "svg" or "html".
- 
         Returns:
             Tuple of (objects, output_string).
         """
@@ -226,7 +248,11 @@ class Contourify:
 __all__ = [
     "Contourify",
     "Detector",
+    "DetectedObject",
+    "BBox",
     "Generator",
+    "BaseDetector",
+    "YOLODetector",
     "validate_image",
     "__version__",
 ]

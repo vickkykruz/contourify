@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
  
 [project]
 name = "contourify"
-version = "0.1.2"
+version = "0.2.0"
 description = "Turn any image into an interactive SVG with AI-powered object detection and clickable hotspots."
 readme = "README.md"
 license = "MIT"
